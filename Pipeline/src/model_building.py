@@ -14,7 +14,7 @@ class BaseModelBuilder(ABC):
         self.model_params = kwargs
     
     @abstractmethod
-    def build_mode(self):
+    def build_model(self):
         pass
 
     def save_model(self,filepath):

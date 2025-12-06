@@ -2,6 +2,8 @@ import os
 import joblib
 import logging
 from sklearn.model_selection import GridSearchCV
+from imblearn.pipeline import Pipeline as ImbPipeline
+from imblearn.over_sampling import SMOTE
 
 # Configure logging
 logging.basicConfig(
@@ -31,8 +33,14 @@ class ModelTrainer:
     def train(self, X_train, Y_train, model):
         if self.param_grid:
             logger.info("Starting GridSearchCV for hyperparameter tuning...")
+
+            pipeline = ImbPipeline([
+                ('smote', SMOTE(random_state=42)),
+                ('model', model)
+            ])
+
             grid_search = GridSearchCV(
-                estimator=model,
+                estimator=pipeline,
                 param_grid=self.param_grid,
                 cv=self.cv,
                 scoring=self.scoring,

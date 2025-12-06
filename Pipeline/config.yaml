@@ -100,12 +100,12 @@ model:
   model_path: "artifacts/models/random_forest_cv_model.pkl"
   evaluation_path: "artifacts/evaluation/random_forest_cv_evaluation_report.txt"
   model_params:
-    n_estimators: [100, 200]
-    max_depth: [5, 10]
-    learning_rate: [0.01, 0.1, 0.2]
-    subsample: [0.8, 1.0]
-    colsample_bytree: [0.8, 1.0]
-    random_state: [42]
+    model__n_estimators: [100, 200]
+    model__max_depth: [5, 10]
+    model__learning_rate: [0.01, 0.1, 0.2]
+    model__subsample: [0.8, 1.0]
+    model__colsample_bytree: [0.8, 1.0]
+    model__random_state: [42]
   model_types:
     random_forest:
       n_estimators: [100, 200]
