@@ -20,10 +20,10 @@ class FeatureScalingStrategy(ABC):
 
 
 class MinMaxScalingStrategy(FeatureScalingStrategy):
-    def __init__(self):
+    def __init__(self,scaler_path):
         self.scaler = MinMaxScaler()
         self.fitted = False
-        self.scaler_path = "artifacts/encode/minmax_scaler.joblib"
+        self.scaler_path = scaler_path
 
     def scale(self, df: pd.DataFrame, columns_to_scale: List[str]) -> pd.DataFrame:
         if not columns_to_scale:
@@ -38,9 +38,6 @@ class MinMaxScalingStrategy(FeatureScalingStrategy):
             df_copy[columns_to_scale] = self.scaler.fit_transform(df_copy[columns_to_scale])
             self.fitted = True
             logger.info(f"MinMax scaling applied successfully.")
-
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(self.scaler_path), exist_ok=True)
 
             # Save scaler
             joblib.dump(self.scaler, self.scaler_path)

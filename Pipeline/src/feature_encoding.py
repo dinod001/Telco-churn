@@ -36,7 +36,7 @@ class NominalEncodingStrategy(FeatureEncodingStrategy):
 
             try:
                 logger.info(f"Encoding column: {column}")
-                df_dummies = pd.get_dummies(df_copy[column], prefix=column)
+                df_dummies = pd.get_dummies(df_copy[column], prefix=column).astype(int)
                 df_copy = pd.concat([df_copy, df_dummies], axis=1)
                 del df_copy[column]
                 logger.info(f"Column '{column}' encoded successfully.")
