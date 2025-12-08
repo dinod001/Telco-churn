@@ -121,39 +121,8 @@ class Preprocessing(ModelInference):
 
         return {
             "prediction": label_encoder.inverse_transform(prediction)[0],
-            "probability": float(max(prediction_proba[0]))
+            "probability": str(round(float(max(prediction_proba[0]) * 100), 2)) + "%"
+
+
         }
 
-
-# ===================================================================
-# ---------------------- SAMPLE TEST --------------------------------
-# ===================================================================
-
-if __name__ == "__main__":
-    sample_data = {
-        "customerID": "7590-VHVEG",
-        "gender": "Female",
-        "SeniorCitizen": 0,
-        "Partner": "Yes",
-        "Dependents": "No",
-        "tenure": 12,
-        "PhoneService": "Yes",
-        "MultipleLines": "No",
-        "InternetService": "Fiber optic",
-        "OnlineSecurity": "No",
-        "OnlineBackup": "Yes",
-        "DeviceProtection": "No",
-        "TechSupport": "No",
-        "StreamingTV": "Yes",
-        "StreamingMovies": "Yes",
-        "Contract": "Month-to-month",
-        "PaperlessBilling": "Yes",
-        "PaymentMethod": "Electronic check",
-        "MonthlyCharges": 89.10,
-        "TotalCharges": 1085.50
-    }
-
-    preprocessor = Preprocessing(sample_data)
-    output = preprocessor.predict()
-
-    print("Final Prediction:", output)
