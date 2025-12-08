@@ -122,7 +122,5 @@ class Preprocessing(ModelInference):
         return {
             "prediction": label_encoder.inverse_transform(prediction)[0],
             "probability": str(round(float(max(prediction_proba[0]) * 100), 2)) + "%"
-
-
         }
 
