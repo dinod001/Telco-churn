@@ -40,6 +40,7 @@ from config import (
     get_scaling_config, 
     get_splitting_config
 )
+from mlflow_utils import MLflowTracker
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Main Pipeline
@@ -58,6 +59,24 @@ def data_pipeline(
     encoding_config = get_encoding_config()
     scaling_config = get_scaling_config()
     splitting_config = get_splitting_config()
+
+    # Mlflow setup
+    mlflow_tracker = MLflowTracker()
+    mlflow_tracker.setup_mlflow_autolog()
+    run_tags = mlflow_tracker.create_mlflow_run_tags(
+        'data_pipeline',
+        {
+            'data_path': data_path,
+            'columns': columns,
+            'outlier_config': outlier_config,
+            'binning_config': binning_config,
+            'encoding_config': encoding_config,
+            'scaling_config': scaling_config,
+            'splitting_config': splitting_config
+        }
+    )
+
+    mlflow_tracker.start_run(run_name="data_pipeline",tags=run_tags)
 
     # Create directories
     artifacts_dir = os.path.join(os.path.dirname(__file__), "..", data_paths["data_artifacts_dir"])
@@ -88,6 +107,17 @@ def data_pipeline(
             "Y_train": pd.read_csv(Y_train_path),
             "Y_test": pd.read_csv(Y_test_path)
         }
+
+        mlflow_tracker.log_data_pipeline_metrics({
+            'total_rows': len(df),
+            'train_rows': len(X_train),
+            'test_rows': len(X_test),
+            'num_features': X_train.shape[1],
+            'missing_values': X_train.isna().sum().sum(),
+            'outliers_removed': 0 
+        })
+
+        mlflow_tracker.end_run()
     logger.info("──────────────────────────────────────────────")
 
     # ───────────────────────────────────────────────────────────────────────────

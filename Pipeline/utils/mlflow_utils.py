@@ -63,9 +63,11 @@ class MLflowTracker:
         if tags:
             default_tags.update(tags)
             
+        if mlflow.active_run():
+            mlflow.end_run()
+            
         run = mlflow.start_run(run_name=run_name, tags=default_tags)
         logger.info(f"Started MLflow run: {run_name} (ID: {run.info.run_id})")
-        print(f"🎯 MLflow Run Name: {run_name}")
         return run
     
     def log_data_pipeline_metrics(self, dataset_info: Dict[str, Any]):
@@ -241,22 +243,22 @@ class MLflowTracker:
             logger.error(f"Error ending MLflow run: {e}")
 
 
-def setup_mlflow_autolog():
-    """Setup MLflow autologging for supported frameworks"""
-    mlflow_config = get_mlflow_config()
-    if mlflow_config.get('autolog', True):
-        mlflow.sklearn.autolog()
-        logger.info("MLflow autologging enabled for scikit-learn")
-
-
-def create_mlflow_run_tags(pipeline_type: str, additional_tags: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-    """Create standardized tags for MLflow runs"""
-    tags = {
-        'pipeline_type': pipeline_type,
-        'timestamp': datetime.now().isoformat(),
-    }
     
-    if additional_tags:
-        tags.update(additional_tags)
-    
-    return tags
+    def setup_mlflow_autolog(self):
+        """Setup MLflow autologging for supported frameworks"""
+        mlflow_config = get_mlflow_config()
+        if mlflow_config.get('autolog', True):
+            mlflow.sklearn.autolog()
+            logger.info("MLflow autologging enabled for scikit-learn")
+
+    def create_mlflow_run_tags(self, pipeline_type: str, additional_tags: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """Create standardized tags for MLflow runs"""
+        tags = {
+            'pipeline_type': pipeline_type,
+            'timestamp': datetime.now().isoformat(),
+        }
+        
+        if additional_tags:
+            tags.update(additional_tags)
+        
+        return tags

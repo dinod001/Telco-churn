@@ -9,6 +9,7 @@ from model_training import ModelTrainer
 from model_evaluation import ModelEvaluator
 from model_building import XGboostModelBuilder, RandomForestModelBuilder
 from config import get_model_config, get_data_paths
+from mlflow_utils import MLflowTracker
 
 # ---------------------------------------------------------------------
 # Logging Configuration
@@ -43,6 +44,23 @@ def training_pipeline(
         data_pipeline()
     else:
         logger.info("📦 Loading existing data artifacts...")
+    
+    # Setup Mflow
+    mlflow_tracker = MLflowTracker()
+    mlflow_tracker.setup_mlflow_autolog()
+    run_tags = mlflow_tracker.create_mlflow_run_tags(
+        'training_pipeline',
+        {   
+
+            'model_type': 'XGBoost',
+            'model_params': model_params,
+            'test_size': test_size,
+            'random_state': random_state,
+            'model_path': model_path
+        }
+    )
+
+    mlflow_tracker.start_run(run_name="training_pipeline",tags=run_tags)
 
     # -----------------------------------------------------------------
     # Load Data
@@ -86,6 +104,13 @@ def training_pipeline(
     # Remove confusion matrix before printing
     results_display = evaluation_results.copy()
     results_display.pop("cm", None)
+    
+    #mlflow
+    model_params = get_model_config()['model_params']
+
+    mlflow_tracker.log_training_metrics(model, evaluation_results,model_params)
+
+    mlflow_tracker.end_run()
 
     logger.info("✨ Evaluation Results:")
     for k, v in results_display.items():
