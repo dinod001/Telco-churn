@@ -1,9 +1,9 @@
-SHELL := /usr/bin/env bash
+SHELL := /bin/bash
 .ONESHELL:
 
 .PHONY: all clean install install-uv verify-python setup-dirs train-pipeline data-pipeline streaming-inference run-all help re-run-all
 
-# Default Python interpreter
+# Default Python interprete
 # Use uv run python if .venv exists, otherwise fall back to python
 PYTHON = $(shell if [ -d .venv ]; then echo "uv run python"; else echo "python"; fi)
 VENV = .venv/bin/activate
@@ -45,7 +45,7 @@ help:
 	@echo "  make airflow-clear-stuck - Clear stuck/long-running tasks"
 	@echo "  make airflow-reset       - Reset Airflow database and fix login issues"
 
-# Install uv package manager
+# Install uv package manage
 install-uv:
 	@echo "Installing uv package manager..."
 	@if command -v uv &> /dev/null; then \
@@ -199,17 +199,17 @@ airflow-init: ## Initialize Apache Airflow
 	mkdir -p .airflow/dags && find dags -name "*.py" -exec cp {} .airflow/dags/ \;
 	@echo "Airflow initialized successfully!"
 
-airflow-webserver: ## Start Airflow webserver
+airflow-webserver: ## Start Airflow webserve
 	@echo "Starting Airflow webserver on http://localhost:8080..."
 	@export AIRFLOW_HOME="$(shell pwd)/.airflow" && \
 	source $(VENV) && \
 	airflow webserver --port 8080
 
-airflow-scheduler: ## Start Airflow scheduler
+airflow-scheduler: ## Start Airflow schedule
 	@echo "Starting Airflow scheduler..."
 	@export AIRFLOW_HOME="$(shell pwd)/.airflow" && \
 	source $(VENV) && \
-	airflow scheduler
+	airflow schedule
 
 airflow-start: ## Start Airflow in standalone mode (simpler for local dev)
 	@echo "Checking for port conflicts..."
@@ -225,6 +225,8 @@ airflow-start: ## Start Airflow in standalone mode (simpler for local dev)
 	@echo "Login with: admin / admin"
 	@export AIRFLOW_HOME="$(shell pwd)/.airflow" && \
 	export PYTHONWARNINGS="ignore::DeprecationWarning" && \
+	export AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT=300 && \
+	export AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT=300 && \
 	source $(VENV) && \
 	airflow standalone
 
@@ -237,7 +239,7 @@ airflow-start-separate: ## Start Airflow webserver and scheduler separately
 	source $(VENV) && \
 	trap "kill 0" INT TERM EXIT && \
 	airflow webserver --port 8080 & \
-	airflow scheduler
+	airflow schedule
 
 airflow-dags-list: ## List all available DAGs
 	@echo "Listing Airflow DAGs..."

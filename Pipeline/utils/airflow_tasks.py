@@ -28,7 +28,7 @@ def setup_project_environment() -> str:
         str(project_root),
         str(project_root / 'src'),
         str(project_root / 'utils'),
-        str(project_root / 'pipelines')
+        str(project_root / 'pipeline')
     ]
 
     for path in paths_to_add:
