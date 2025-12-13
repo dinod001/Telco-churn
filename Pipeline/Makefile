@@ -147,7 +147,7 @@ test-pyspark: setup-dirs
 # Run streaming inference pipeline with sample JSON
 streaming-inference: setup-dirs
 	@echo "Running streaming inference pipeline with sample JSON..."
-	@source $(VENV) && $(PYTHON) pipelines/streaming_inference_pipeline.py
+	@source $(VENV) && $(PYTHON) pipelines/model_inference_pipeline.py
 
 # Run all pipelines in sequence
 run-all: setup-dirs
