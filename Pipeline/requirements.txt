@@ -58,3 +58,5 @@ groq>=0.11.0
 # libgomp1 (for OpenMP support)
 # libblas-dev
 # liblapack-dev 
+
+confluent-kafka>=2.0.0

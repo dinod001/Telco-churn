@@ -1,4 +1,5 @@
 SHELL := /bin/bash
+export LC_ALL=C
 .ONESHELL:
 
 .PHONY: all clean install install-uv verify-python setup-dirs train-pipeline data-pipeline streaming-inference run-all help re-run-all
@@ -8,42 +9,55 @@ SHELL := /bin/bash
 PYTHON = $(shell if [ -d .venv ]; then echo "uv run python"; else echo "python"; fi)
 VENV = .venv/bin/activate
 MLFLOW_PORT ?= 5001
+PID_DIR = runtime/pids
+KAFKA_CONF = kafka/server.properties
 
 # Default target
 all: help
 
 # Help target
 help:
-	@echo "Available targets:"
-	@echo "  make install             - Install Python 3.12 and project dependencies using uv"
-	@echo "  make install-uv          - Install uv package manager"
-	@echo "  make verify-python       - Verify Python 3.12 is being used"
-	@echo "  make setup-dirs          - Create necessary directories for pipelines"
-	@echo "  make data-pipeline       - Run the data pipeline"
-	@echo "  make train-pipeline      - Run the training pipeline (PySpark MLlib)"
-	@echo "  make train-sklearn       - Run the training pipeline (scikit-learn)"
-	@echo "  make train-pyspark       - Run the training pipeline (PySpark MLlib)"
-	@echo "  make test-pyspark        - Test PySpark MLlib pipeline"
-	@echo "  make streaming-inference - Run the streaming inference pipeline with the sample JSON"
-	@echo "  make run-all             - Run all pipelines in sequence"
-	@echo "  make clean               - Clean up artifacts"
-	@echo "  make airflow-init        - Initialize Apache Airflow"
-	@echo "  make airflow-standalone  - Start Airflow in standalone mode"
-	@echo "  make airflow-start       - Start Airflow webserver and scheduler"
-	@echo "  make airflow-webserver   - Start Airflow webserver only"
-	@echo "  make airflow-scheduler   - Start Airflow scheduler only"
-	@echo "  make airflow-dags-list   - List all available DAGs"
-	@echo "  make airflow-test-data-pipeline    - Test data pipeline DAG"
-	@echo "  make airflow-test-training-pipeline - Test training pipeline DAG"
-	@echo "  make airflow-test-inference-pipeline - Test inference pipeline DAG"
-	@echo "  make airflow-clean       - Clean Airflow database and logs"
-	@echo "  make airflow-delete-dags - Delete all DAGs from Airflow UI"
-	@echo "  make airflow-kill        - Kill all running Airflow processes"
-	@echo "  make airflow-trigger-all - Trigger all DAGs manually for testing"
-	@echo "  make airflow-generate-graphs - Generate DAG graph visualizations"
-	@echo "  make airflow-health      - Check Airflow health status"
-	@echo "  make airflow-clear-stuck - Clear stuck/long-running tasks"
-	@echo "  make airflow-reset       - Reset Airflow database and fix login issues"
+	@echo "🚀 Production ML System with Kafka Streaming"
+	@echo "============================================="
+	@echo ""
+	@echo "Setup Commands:"
+	@echo "  make install             - Install dependencies and create virtualenv"
+	@echo "  make setup-dirs          - Create required directories"
+	@echo "  make clean               - Cleanup artifacts and caches"
+	@echo ""
+	@echo "ML Pipeline Commands:"
+	@echo "  make data-pipeline       - Run data pipeline"
+	@echo "  make train-pipeline      - Run training pipeline"
+	@echo "  make batch-inference     - Run batch inference"
+	@echo ""
+	@echo "MLflow Commands:"
+	@echo "  make mlflow-ui           - Start MLflow UI"
+	@echo "  make stop-all            - Stop all MLflow servers"
+	@echo ""
+	@echo "Kafka Commands:"
+	@echo "  make kafka-validate      - Validate Kafka installation"
+	@echo "  make kafka-format        - Format Kafka storage"
+	@echo "  make kafka-start-bg      - Start Kafka in background"
+	@echo "  make kafka-stop          - Stop Kafka broker"
+	@echo "  make kafka-topics        - Create topics"
+	@echo "  make kafka-cleanup-topics- Cleanup topics"
+	@echo "  make kafka-producer-stream - Streaming producer"
+	@echo "  make kafka-producer-batch  - Batch producer"
+	@echo "  make kafka-consumer        - Batch consumer"
+	@echo "  make kafka-consumer-continuous - Continuous consumer"
+	@echo "  make kafka-check           - Check Kafka status"
+	@echo ""
+	@echo "Airflow Commands:"
+	@echo "  make airflow-init        - Initialize Airflow"
+	@echo "  make airflow-start       - Start Airflow"
+	@echo "  make airflow-kill        - Kill Airflow processes"
+	@echo "  make airflow-reset       - Reset Airflow database"
+	@echo ""
+	@echo "Quick Start Example:"
+	@echo "  make install setup-dirs"
+	@echo "  make kafka-start-bg kafka-topics"
+	@echo "  make kafka-producer-batch"
+	@echo "  make kafka-consumer"
 
 # Install uv package manage
 install-uv:
@@ -406,3 +420,67 @@ re-run-all: ## 🔄 Complete reset: kill processes, clean everything, restart fr
 	@echo "=================================================="
 	@echo "💡 Use 'make airflow-kill' to stop all processes"
 	@echo "💡 Use 'make airflow-health' to check status"
+
+# ==========================
+# KAFKA
+# ==========================
+kafka-validate:
+	@if [ -z "$$KAFKA_HOME" ]; then echo "❌ KAFKA_HOME not set"; exit 1; fi
+	@if [ ! -d "$$KAFKA_HOME" ]; then echo "❌ KAFKA_HOME directory not found"; exit 1; fi
+	@command -v java >/dev/null 2>&1 || { echo "❌ Java not found"; exit 1; }
+	@echo "✅ Kafka installation is valid. KAFKA_HOME=$$KAFKA_HOME"
+	@java -version | head -1
+
+kafka-format:
+	@mkdir -p runtime/kafka-logs runtime/pids
+	@CLUSTER_ID=$$($(KAFKA_HOME)/bin/kafka-storage.sh random-uuid)
+	@echo "Cluster ID: $$CLUSTER_ID"
+	@$(KAFKA_HOME)/bin/kafka-storage.sh format -t $$CLUSTER_ID -c "$(KAFKA_CONF)"
+	@echo "✅ Kafka storage formatted."
+
+kafka-start-bg:
+	@mkdir -p $(PID_DIR)
+	@nohup $(KAFKA_HOME)/bin/kafka-server-start.sh "$(KAFKA_CONF)" > runtime/kafka.log 2>&1 &
+	@echo $$! > $(PID_DIR)/kafka.pid
+	@echo "✅ Kafka started in background (PID: $$(cat $(PID_DIR)/kafka.pid))"
+
+kafka-stop:
+	@if [ -f "$(PID_DIR)/kafka.pid" ]; then \
+		PID=$$(cat $(PID_DIR)/kafka.pid); \
+		kill $$PID || true; \
+		rm -f $(PID_DIR)/kafka.pid; \
+		echo "✅ Kafka stopped"; \
+	else \
+		echo "⚠️ Kafka PID not found"; \
+	fi
+
+kafka-topics:
+	@$(KAFKA_HOME)/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic churn_predictions --partitions 1 --replication-factor 1 --if-not-exists 2>&1 | grep -v "limitations in metric names" || true
+	@$(KAFKA_HOME)/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic churn_predictions_scored --partitions 1 --replication-factor 1 --if-not-exists 2>&1 | grep -v "limitations in metric names" || true
+	@$(KAFKA_HOME)/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list 2>&1 | grep -v "limitations in metric names" || true
+
+kafka-cleanup-topics:
+	@for topic in customer_events model_updates data_quality_alerts; do \
+		if $(KAFKA_HOME)/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list | grep -q "$$topic"; then \
+			$(KAFKA_HOME)/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic "$$topic"; \
+		fi; \
+	done
+
+kafka-check:
+	@if $(KAFKA_HOME)/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then \
+		echo "✅ Kafka broker running at localhost:9092"; \
+	else \
+		echo "❌ Kafka broker not reachable"; \
+	fi
+
+kafka-producer-stream:
+	@source $(VENV) && python pipelines/kafka_producer.py --mode streaming --rate 1 --duration 300
+
+kafka-producer-batch:
+	@source $(VENV) && python pipelines/kafka_producer.py --mode batch --num-events 100
+
+kafka-consumer:
+	@source $(VENV) && python pipelines/kafka_batch_consumer.py
+
+kafka-consumer-continuous:
+	@source $(VENV) && python pipelines/kafka_batch_consumer.py --continuous --poll-interval 5
