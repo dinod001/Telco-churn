@@ -28,7 +28,7 @@ help:
 	@echo "ML Pipeline Commands:"
 	@echo "  make data-pipeline       - Run data pipeline"
 	@echo "  make train-pipeline      - Run training pipeline"
-	@echo "  make batch-inference     - Run batch inference"
+	@echo "  make streaming-inference - Run streaming inference"
 	@echo ""
 	@echo "MLflow Commands:"
 	@echo "  make mlflow-ui           - Start MLflow UI"

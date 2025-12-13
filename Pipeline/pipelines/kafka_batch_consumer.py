@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+"""
+Simplified Kafka Consumer with ML Predictions
+Processes customer events with real-time ML inference
+"""
+
+import json
+import logging
+import argparse
+import os
+import sys
+import time
+from typing import Dict, Any
+from datetime import datetime
+
+# Add project root to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, 'src'))
+
+from confluent_kafka import Consumer, Producer, KafkaError
+from src.model_inference import Preprocessing
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Constants
+INPUT_TOPIC = "churn_predictions"
+OUTPUT_TOPIC = "churn_predictions_scored"
+
+
+class MLKafkaConsumer:
+    """Simplified ML Kafka Consumer"""
+    
+    def __init__(self):
+        # Preprocessing class loads models internally on import/usage
+        pass
+        
+    def initialize(self):
+        """Initialize check"""
+        try:
+            # Check if artifacts exist as a sanity check
+            encoders_dir = os.path.join(project_root, "artifacts", "encoders")
+            if os.path.exists(encoders_dir):
+                logger.info("✅ ML resources found")
+                return True
+            else:
+                logger.warning(f"⚠️ Encoders directory not found at {encoders_dir}")
+                return True # Try anyway, let Preprocessing handle errors
+        except Exception as e:
+            logger.error(f"❌ Initialization failed: {str(e)}")
+            return False
+    
+    def extract_customer_data(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract and validate customer data"""
+        # Handle nested structure
+        customer_data = message_data.get('data', message_data)
+        
+        # Required fields with defaults relative to the dataset
+        return {
+            # Original dataset keys
+            'customerID': customer_data.get('customerID', '0'),
+            'gender': customer_data.get('gender', 'Male'),
+            'SeniorCitizen': customer_data.get('SeniorCitizen', 0),
+            'Partner': customer_data.get('Partner', 'No'),
+            'Dependents': customer_data.get('Dependents', 'No'),
+            'tenure': customer_data.get('tenure', 0),
+            'PhoneService': customer_data.get('PhoneService', 'Yes'),
+            'MultipleLines': customer_data.get('MultipleLines', 'No'),
+            'InternetService': customer_data.get('InternetService', 'DSL'),
+            'OnlineSecurity': customer_data.get('OnlineSecurity', 'No'),
+            'OnlineBackup': customer_data.get('OnlineBackup', 'No'),
+            'DeviceProtection': customer_data.get('DeviceProtection', 'No'),
+            'TechSupport': customer_data.get('TechSupport', 'No'),
+            'StreamingTV': customer_data.get('StreamingTV', 'No'),
+            'StreamingMovies': customer_data.get('StreamingMovies', 'No'),
+            'Contract': customer_data.get('Contract', 'Month-to-month'),
+            'PaperlessBilling': customer_data.get('PaperlessBilling', 'Yes'),
+            'PaymentMethod': customer_data.get('PaymentMethod', 'Electronic check'),
+            'MonthlyCharges': float(customer_data.get('MonthlyCharges', 0.0)),
+            'TotalCharges': float(customer_data.get('TotalCharges', 0.0)),
+            'Churn': customer_data.get('Churn', 'No'),
+        }
+
+    
+    def process_batch(self, max_messages: int = 1000, timeout: int = 10, 
+                     group_id: str = None) -> int:
+        """Process batch of messages with ML predictions"""
+        
+        # Configure consumer
+        if group_id is None:
+            group_id = f"batch_consumer_{int(time.time())}"
+        
+        consumer_config = {
+            'bootstrap.servers': 'localhost:9092',
+            'group.id': group_id,
+            'auto.offset.reset': 'earliest' if 'batch_' in group_id else 'latest',
+            'enable.auto.commit': True
+        }
+        
+        consumer = Consumer(consumer_config)
+        consumer.subscribe([INPUT_TOPIC])
+        
+        # Collect messages
+        messages = []
+        start_time = time.time()
+        
+        while len(messages) < max_messages and (time.time() - start_time) < timeout:
+            msg = consumer.poll(timeout=1.0)
+            
+            if msg is None:
+                continue
+            if msg.error():
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                    break
+                continue
+            
+            try:
+                message_data = json.loads(msg.value().decode('utf-8'))
+                messages.append(message_data)
+            except json.JSONDecodeError:
+                continue
+        
+        consumer.close()
+        
+        if not messages:
+            logger.warning("⚠️ No messages to process")
+            return 0
+        
+        # Process with ML
+        logger.info(f"📥 Processing {len(messages)} messages with ML")
+        
+        # Setup producer for results
+        producer = Producer({'bootstrap.servers': 'localhost:9092'})
+        processed = 0
+        
+        print(f"\n📊 ML PREDICTIONS")
+        print("=" * 70)
+        print("Status | Customer   | Prediction | Probability")
+        print("-" * 70)
+        
+        for i, message_data in enumerate(messages):
+            try:
+                # Extract customer data
+                customer_data = self.extract_customer_data(message_data)
+                customer_id = customer_data.get('customerID', 'N/A')
+                
+                # Make prediction
+                # Instantiate Preprocessing with the single record
+                prediction_result = Preprocessing(customer_data).predict()
+                
+                status = prediction_result.get('prediction', 'Unknown')
+                confidence = prediction_result.get('probability', '0%')
+                
+                # Display result
+                pred_emoji = "🟢" if 'No' in status else "🔴" # Assuming 'No' means 'No Churn' (Retain), 'Yes' means Churn
+                print(f"  {pred_emoji}   | {str(customer_id)[:10]:10s} | {status:10s} | {confidence:10s}")
+                
+                # Send result
+                result = {
+                    'customer_id': customer_id,
+                    'original_data': customer_data,
+                    'prediction': prediction_result,
+                    'processed_at': datetime.now().isoformat(),
+                    'batch_id': f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                }
+                
+                producer.produce(
+                    topic=OUTPUT_TOPIC,
+                    key=str(customer_id),
+                    value=json.dumps(result, default=str)
+                )
+                
+                processed += 1
+                
+            except Exception as e:
+                print(f"  ❌   | {str(customer_id)[:10]:10s} | FAILED     | ERROR")
+                logger.error(f"Error processing message {i}: {str(e)}")
+        
+        producer.flush()
+        
+        print("-" * 70)
+        print(f"✅ Completed: {processed}/{len(messages)} predictions")
+        print("=" * 70)
+        
+        logger.info(f"🎉 Processed {processed} messages successfully")
+        return processed
+    
+    def run_continuous(self, poll_interval: int = 3, show_progress: bool = True):
+        """Run continuous processing"""
+        logger.info("🔄 Starting continuous ML processing")
+        logger.info("🛑 Press Ctrl+C to stop")
+        
+        total_processed = 0
+        
+        try:
+            while True:
+                if show_progress:
+                    print(f"\n📡 Checking for new messages... (Total: {total_processed})")
+                
+                # Process new messages
+                processed = self.process_batch(
+                    max_messages=50,
+                    timeout=poll_interval,
+                    group_id='continuous_ml_consumer'
+                )
+                
+                if processed > 0:
+                    total_processed += processed
+                    print(f"✅ Processed {processed} new messages (Total: {total_processed})")
+                else:
+                    if show_progress:
+                        print("⏳ No new messages - waiting...")
+                    else:
+                        print(".", end="", flush=True)
+                
+                time.sleep(poll_interval)
+                
+        except KeyboardInterrupt:
+            logger.info(f"🛑 Continuous processing stopped (Total: {total_processed})")
+
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser(description="Kafka Consumer with ML Predictions")
+    parser.add_argument('--max-messages', type=int, default=1000)
+    parser.add_argument('--timeout', type=int, default=10)
+    parser.add_argument('--continuous', action='store_true')
+    parser.add_argument('--poll-interval', type=int, default=3)
+    parser.add_argument('--quiet', action='store_true')
+    
+    args = parser.parse_args()
+    
+    try:
+        logger.info("🚀 Starting Kafka ML Consumer")
+        
+        consumer = MLKafkaConsumer()
+        if not consumer.initialize():
+            return 1
+        
+        if args.continuous:
+            consumer.run_continuous(args.poll_interval, not args.quiet)
+        else:
+            processed = consumer.process_batch(args.max_messages, args.timeout)
+            return 0 if processed > 0 else 1
+        
+    except Exception as e:
+        logger.error(f"❌ Consumer failed: {str(e)}")
+        return 1
+
+
+if __name__ == "__main__":
+    exit(main())
