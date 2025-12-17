@@ -107,17 +107,6 @@ def data_pipeline(
             "Y_train": pd.read_csv(Y_train_path),
             "Y_test": pd.read_csv(Y_test_path)
         }
-
-        mlflow_tracker.log_data_pipeline_metrics({
-            'total_rows': len(df),
-            'train_rows': len(X_train),
-            'test_rows': len(X_test),
-            'num_features': X_train.shape[1],
-            'missing_values': X_train.isna().sum().sum(),
-            'outliers_removed': 0 
-        })
-
-        mlflow_tracker.end_run()
     logger.info("──────────────────────────────────────────────")
 
     # ───────────────────────────────────────────────────────────────────────────
@@ -125,7 +114,7 @@ def data_pipeline(
     # ───────────────────────────────────────────────────────────────────────────
     logger.info("\n\n🛠 STEP 02 — Data Ingestion\n\n")
     df = ReadCSV(data_path).ingest()
-    logger.info(f"📊 Data shape: {df.shape}")
+    logger.info(f"📊 Data loaded. Columns: {len(df.columns)}")
     logger.info("──────────────────────────────────────────────")
 
     # ───────────────────────────────────────────────────────────────────────────
@@ -160,11 +149,11 @@ def data_pipeline(
     # Ordinal
     ordinal_encoder = OrdinalEncodingStrategy(columns["ordinal_features"])
     df = ordinal_encoder.encode(df)
-    ordinal_encoder.save_encoder(os.path.join(encoder_dir, "ordinal_encoder.joblib"))
+    ordinal_encoder.save_encoder(os.path.join(encoder_dir, "ordinal_encoder_model"))
     # Label (Target)
     label_encoder = LabelEncodingStrategy(columns["target_feature"])
     df = label_encoder.encode(df)
-    label_encoder.save_encoder(os.path.join(encoder_dir, "label_encoder.joblib"))
+    label_encoder.save_encoder(os.path.join(encoder_dir, "label_encoder_model"))
     logger.info("──────────────────────────────────────────────")
 
     # ───────────────────────────────────────────────────────────────────────────
@@ -172,11 +161,12 @@ def data_pipeline(
     # ───────────────────────────────────────────────────────────────────────────
     logger.info("\n\n📏 STEP 07 — Feature Scaling\n\n")
     scaler = MinMaxScalingStrategy(
-        scaler_path=os.path.join(encoder_dir, "minmax_scaler.joblib")
+        scaler_path=os.path.join(encoder_dir, "minmax_scaler_model")
     )
     df = scaler.scale(df, columns["numerical_features"])
     if "customerID" in df.columns:
-        df = df.drop(columns=["customerID"])
+        # FIX: Pyspark drop takes *cols, not columns=list
+        df = df.drop("customerID")
         logger.info("🆔 Dropped 'customerID' column")
     logger.info("──────────────────────────────────────────────")
 
@@ -184,6 +174,11 @@ def data_pipeline(
     # STEP 08 — Train/Test Split
     # ───────────────────────────────────────────────────────────────────────────
     logger.info("\n\n✂️ STEP 08 — Data Splitting\n\n")
+    
+    # Convert Spark DataFrame to Pandas for Splitting
+    logger.info("🔄 Converting Spark DataFrame to Pandas for Splitting...")
+    df = df.toPandas()
+    
     splitter = SimpleTrainTestSplitStratergy()
     X_train, X_test, Y_train, Y_test = splitter.split_data(df, columns["target_feature"])
     logger.info("──────────────────────────────────────────────")
