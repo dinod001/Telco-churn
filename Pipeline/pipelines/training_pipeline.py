@@ -47,7 +47,6 @@ def training_pipeline(
     
     # Setup Mflow
     mlflow_tracker = MLflowTracker()
-    mlflow_tracker.setup_mlflow_autolog()
     run_tags = mlflow_tracker.create_mlflow_run_tags(
         'training_pipeline',
         {   
@@ -61,7 +60,7 @@ def training_pipeline(
     )
 
     mlflow_tracker.start_run(run_name="training_pipeline",tags=run_tags)
-
+    mlflow_tracker.setup_mlflow_autolog()
     # -----------------------------------------------------------------
     # Load Data
     # -----------------------------------------------------------------
